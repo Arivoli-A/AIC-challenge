@@ -7,16 +7,17 @@ ENV PATH="/root/.pixi/bin:$PATH"
 # Add base dependencies
 COPY aic_example_policies /ws_aic/src/aic/aic_example_policies
 COPY aic_model /ws_aic/src/aic/aic_model
+COPY openpi-client /ws_aic/src/aic/openpi-client
 COPY aic_interfaces /ws_aic/src/aic/aic_interfaces
 COPY aic_utils /ws_aic/src/aic/aic_utils
-COPY pixi.toml pixi.lock /ws_aic/src/aic/
+COPY pixi.toml pixi.lock robostack_mapping.json /ws_aic/src/aic/
 COPY pixi_env_setup.sh /ws_aic/src/aic/
 
 # Add other dependencies
 
 SHELL ["/bin/bash", "-c"]
 RUN --mount=type=cache,target=/root/.cache/rattler/cache --mount=type=cache,target=/ws_aic/src/aic/.pixi/build \
-    cd /ws_aic/src/aic && pixi install --locked
+    cd /ws_aic/src/aic && rm -f pixi.lock && pixi install
 
 WORKDIR /ws_aic/src/aic
 COPY --chmod=755 <<"EOF" /entrypoint.sh

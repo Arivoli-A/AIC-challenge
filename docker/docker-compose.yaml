@@ -1,5 +1,31 @@
 name: aic
 services:
+  openpi_server:
+    image: openpi_server_tpu
+    build:
+      context: ../openpi
+      dockerfile: scripts/docker/serve_policy_tpu.Dockerfile
+    privileged: true
+    network_mode: host
+    shm_size: 16gb
+    cap_add:
+      - ALL
+    devices:
+      - /dev:/dev
+    environment:
+      - SERVER_ARGS=--env ALOHA_SIM
+      - OPENPI_DATA_HOME=/openpi_assets
+      - TPU_NAME=local
+      - TF_CPP_MIN_LOG_LEVEL=0
+      - XRT_TPU_CONFIG=localservice;0;localhost:51011
+      - TF_XLA_FLAGS=--tf_xla_enable_xla_devices
+      - PJRT_DEVICE=TPU
+      - LD_LIBRARY_PATH=/lib
+    volumes:
+      - /mnt/disks/aic-challenge/aic/openpi/.venv/lib/python3.11/site-packages/libtpu/libtpu.so:/lib/libtpu.so
+      - ../openpi:/app
+      # - /home/aanbarasu/.cache/openpi:/openpi_assets
+      # - /usr/share/tpu/:/usr/share/tpu/
   eval:
     image: ghcr.io/intrinsic-dev/aic/aic_eval
     # image: my-eval:v1
@@ -7,7 +33,6 @@ services:
       dockerfile: docker/aic_eval/Dockerfile
       context: ..
     command: gazebo_gui:=false launch_rviz:=false ground_truth:=false start_aic_engine:=true shutdown_on_aic_engine_exit:=true
-    gpus: all
     networks:
       - default
     environment:
@@ -19,9 +44,11 @@ services:
     build:
       dockerfile: docker/aic_model/Dockerfile
       context: ..
-    gpus: all
     networks:
       - default
+    extra_hosts:
+      - "openpi_server:host-gateway"
+    command: --ros-args -p policy:=aic_example_policies.ros.RunOpenPIBase_latest -p openpi_host:=openpi_server
     environment:
       RMW_IMPLEMENTATION: rmw_zenoh_cpp
       ZENOH_ROUTER_CHECK_ATTEMPTS: -1

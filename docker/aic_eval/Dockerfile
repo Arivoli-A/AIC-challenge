@@ -7,7 +7,7 @@ RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyri
 # Install dependencies
 RUN mkdir -p /ws_aic/src/aic
 COPY --chmod=644 aic.repos /ws_aic/src/aic/
-COPY --chmod=u=rwX,go=rX --parents **/package.xml /ws_aic/src/aic
+COPY . /ws_aic/src/aic/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
   apt update && apt upgrade -y && \
   # undeclared deps
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
   rosdep install --from-paths src --ignore-src --rosdistro kilted -yr --skip-keys "gz-cmake3 DART libogre-dev libogre-next-2.3-dev"
 
 # Build the workspace
-COPY --chmod=u=rwX,go=rX --exclude=docker . /ws_aic/src/aic
+# COPY --chmod=u=rwX,go=rX --exclude=docker . /ws_aic/src/aic
 SHELL ["/bin/bash", "-c"]
 RUN --mount=type=cache,target=/ws_aic/build,sharing=locked \
   cd /ws_aic \
