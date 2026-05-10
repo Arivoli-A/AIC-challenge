@@ -30,7 +30,7 @@ from aic_model_interfaces.msg import Observation
 from aic_task_interfaces.msg import Task
 
 from aic_control_interfaces.msg import (
-    MotionUpdate,
+    JointMotionUpdate,
     TrajectoryGenerationMode,
 )
 
@@ -40,31 +40,37 @@ from openpi_client import websocket_client_policy
 
 class RunOpenPIBase_latest(Policy):
     """
-    Refined policy for OpenPI VLA Base Models.
-    Aligns with RunACT.py observations (3 cameras, 26-dim state).
+    AIC adapter for OpenPI UR5e-style inference.
+
+    Shapes the AIC observation into the UR5 example schema used by OpenPI:
+    `state` + `image` + `image_mask` + `prompt`.
     """
     def __init__(self, parent_node: Node):
         super().__init__(parent_node)
-        
-        # 1. Initialize OpenPI Client
-        # Adjust host/port if your TPU/GPU server is running elsewhere
+
         parent_node.declare_parameter("openpi_host", "openpi_server")
         parent_node.declare_parameter("openpi_port", 8000)
+        parent_node.declare_parameter("openpi_default_prompt", "")
 
         host = parent_node.get_parameter("openpi_host").get_parameter_value().string_value
         port = parent_node.get_parameter("openpi_port").get_parameter_value().integer_value
+        self.override_prompt = (
+            parent_node.get_parameter("openpi_default_prompt")
+            .get_parameter_value()
+            .string_value
+        )
 
         self.client = websocket_client_policy.WebsocketClientPolicy(host=host, port=port)
-        self.get_logger().info(f"OpenPI Base Policy initialized. Connected to VLA server at {host}:{port}")
+        self.get_logger().info(
+            f"OpenPI UR5 adapter initialized. Connected to VLA server at {host}:{port}"
+        )
 
-        # Config
-        self.image_size = 224      # Standard input size for pi0 models
-        self.image_scaling = 0.25  # Match AICRobotAICControllerConfig scaling
-        self.override_prompt = ""  # User can modify this for natural language control
+        self.image_size = 224
+        self.image_scaling = 0.25
 
     def _process_image(self, raw_img) -> np.ndarray:
         """Converts ROS Image -> Resized -> uint8 numpy array (H, W, C)."""
-        if raw_img is None or raw_img.data is None:
+        if raw_img is None or not raw_img.data:
             return np.zeros((self.image_size, self.image_size, 3), dtype=np.uint8)
 
         # ROS Bytes to Numpy (H, W, C)
@@ -82,41 +88,100 @@ class RunOpenPIBase_latest(Policy):
         resized = image_tools.resize_with_pad(img_np, self.image_size, self.image_size)
         return image_tools.convert_to_uint8(resized)
 
+    @staticmethod
+    def _pose_to_array(pose) -> np.ndarray:
+        return np.asarray(
+            [
+                pose.position.x,
+                pose.position.y,
+                pose.position.z,
+                pose.orientation.x,
+                pose.orientation.y,
+                pose.orientation.z,
+                pose.orientation.w,
+            ],
+            dtype=np.float32,
+        )
+
+    @staticmethod
+    def _twist_to_array(twist) -> np.ndarray:
+        return np.asarray(
+            [
+                twist.linear.x,
+                twist.linear.y,
+                twist.linear.z,
+                twist.angular.x,
+                twist.angular.y,
+                twist.angular.z,
+            ],
+            dtype=np.float32,
+        )
+
+    @staticmethod
+    def _wrench_to_array(wrench) -> np.ndarray:
+        return np.asarray(
+            [
+                wrench.force.x,
+                wrench.force.y,
+                wrench.force.z,
+                wrench.torque.x,
+                wrench.torque.y,
+                wrench.torque.z,
+            ],
+            dtype=np.float32,
+        )
+
     def prepare_observations(self, obs_msg: Observation, prompt: str) -> Dict[str, Any]:
-        """Convert ROS Observation into ALOHA-compatible format for Base VLA."""
-        
-        # 1. Process 3 Cameras (Mapped to ALOHA EXPECTED_CAMERAS)
-        obs = {
-            "images": {
-                "cam_high": self._process_image(obs_msg.center_image),
-                "cam_left_wrist": self._process_image(obs_msg.left_image),
-                "cam_right_wrist": self._process_image(obs_msg.right_image),
-            }
+        """Serialize a fuller AIC observation; OpenPI transforms pick required fields."""
+        left_image = self._process_image(obs_msg.left_image)
+        center_image = self._process_image(obs_msg.center_image)
+        right_image = self._process_image(obs_msg.right_image)
+
+        controller_state = obs_msg.controller_state
+
+        return {
+            "aic_observation": {
+                "images": {
+                    "left": left_image,
+                    "center": center_image,
+                    "right": right_image,
+                },
+                "joint_state": {
+                    "position": np.asarray(obs_msg.joint_states.position, dtype=np.float32),
+                    "velocity": np.asarray(obs_msg.joint_states.velocity, dtype=np.float32),
+                    "effort": np.asarray(obs_msg.joint_states.effort, dtype=np.float32),
+                },
+                "controller_state": {
+                    "tcp_pose": self._pose_to_array(controller_state.tcp_pose),
+                    "tcp_velocity": self._twist_to_array(controller_state.tcp_velocity),
+                    "reference_tcp_pose": self._pose_to_array(controller_state.reference_tcp_pose),
+                    "tcp_error": np.asarray(controller_state.tcp_error, dtype=np.float32),
+                    "reference_joint_positions": np.asarray(
+                        controller_state.reference_joint_state.positions, dtype=np.float32
+                    ),
+                    "reference_joint_velocities": np.asarray(
+                        controller_state.reference_joint_state.velocities, dtype=np.float32
+                    ),
+                    "reference_joint_accelerations": np.asarray(
+                        controller_state.reference_joint_state.accelerations, dtype=np.float32
+                    ),
+                    "reference_joint_effort": np.asarray(
+                        controller_state.reference_joint_state.effort, dtype=np.float32
+                    ),
+                },
+                "wrist_wrench": self._wrench_to_array(obs_msg.wrist_wrench.wrench),
+            },
+            "prompt": prompt,
         }
 
-        # 2. Process Robot State (26 dimensions)
-        tcp_pose = obs_msg.controller_state.tcp_pose
-        tcp_vel = obs_msg.controller_state.tcp_velocity
-
-        state = np.array([
-            # TCP Position (3)
-            tcp_pose.position.x, tcp_pose.position.y, tcp_pose.position.z,
-            # TCP Orientation (4)
-            tcp_pose.orientation.x, tcp_pose.orientation.y, tcp_pose.orientation.z, tcp_pose.orientation.w,
-            # TCP Linear Vel (3)
-            tcp_vel.linear.x, tcp_vel.linear.y, tcp_vel.linear.z,
-            # TCP Angular Vel (3)
-            tcp_vel.angular.x, tcp_vel.angular.y, tcp_vel.angular.z,
-            # TCP Error (6)
-            *obs_msg.controller_state.tcp_error,
-            # Joint Positions (7)
-            *obs_msg.joint_states.position[:7],
-        ], dtype=np.float32)
-
-        obs["state"] = state
-        obs["prompt"] = prompt
-        
-        return obs
+    @staticmethod
+    def _make_prompt(task: Task, override_prompt: str) -> str:
+        if override_prompt:
+            return override_prompt
+        return (
+            f"Insert the {task.cable_name} cable by guiding the {task.plug_name} "
+            f"into port {task.port_name} on {task.target_module_name}."
+        )
 
     def insert_cable(
         self,
@@ -128,8 +193,7 @@ class RunOpenPIBase_latest(Policy):
     ):
         self.get_logger().info(f"RunOpenPIBase_latest.execute_task() started. Task: {task.id}")
         
-        # Natural Language Prompt
-        prompt = self.override_prompt if self.override_prompt else (f"insert {task.cable_name} into {task.port_name}" if f"insert {task.cable_name} into {task.port_name}" else "perform task")
+        prompt = self._make_prompt(task, self.override_prompt)
 
         while True:
             loop_start = time.time()
@@ -153,9 +217,8 @@ class RunOpenPIBase_latest(Policy):
                 
                 self.get_logger().info(f"VLA Base Action received (dim {len(action)})")
 
-                # 3. Command Robot
-                motion_update = self.create_motion_command(action)
-                move_robot(motion_update=motion_update)
+                joint_motion_update = self.create_joint_motion_command(action)
+                move_robot(joint_motion_update=joint_motion_update)
                 send_feedback(f"Executing: {prompt}")
 
             except Exception as e:
@@ -167,22 +230,18 @@ class RunOpenPIBase_latest(Policy):
             elapsed = time.time() - loop_start
             time.sleep(max(0, 0.1 - elapsed)) # 10Hz target
 
-    def create_motion_command(self, action: np.ndarray) -> MotionUpdate:
-        """
-        Converts the raw VLA action vector into a ROS MotionUpdate.
-        Modify based on whether your base model outputs Joints or Cartesian targets.
-        """
-        motion_update_msg = MotionUpdate()
-        motion_update_msg.header.stamp = self.get_clock().now().to_msg()
-        
-        # EXAMPLE: If model outputs 7 joint targets + 1 gripper
-        if len(action) >= 7:
-            motion_update_msg.joint_positions = action[:7].tolist()
-            motion_update_msg.trajectory_generation_mode.mode = TrajectoryGenerationMode.MODE_JOINT_POSITION
-        
-        # EXAMPLE: If model outputs Cartesian velocity (Twist-like)
-        # Note: The user confirmed Twist is an observation, not necessarily the VLA action.
-        # motion_update_msg.velocity = Twist(...)
-        # motion_update_msg.trajectory_generation_mode.mode = TrajectoryGenerationMode.MODE_VELOCITY
+    def create_joint_motion_command(self, action: np.ndarray) -> JointMotionUpdate:
+        """Convert OpenPI UR5-style actions into an AIC joint-space command."""
+        joint_targets = np.asarray(action[:6], dtype=np.float64)
+        if joint_targets.shape[0] < 6:
+            joint_targets = np.pad(joint_targets, (0, 6 - joint_targets.shape[0]))
 
-        return motion_update_msg
+        joint_motion_update = JointMotionUpdate(
+            target_stiffness=[100.0, 100.0, 100.0, 50.0, 50.0, 50.0],
+            target_damping=[40.0, 40.0, 40.0, 15.0, 15.0, 15.0],
+            trajectory_generation_mode=TrajectoryGenerationMode(
+                mode=TrajectoryGenerationMode.MODE_POSITION
+            ),
+        )
+        joint_motion_update.target_state.positions = joint_targets.tolist()
+        return joint_motion_update

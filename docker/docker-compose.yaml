@@ -13,7 +13,7 @@ services:
     devices:
       - /dev:/dev
     environment:
-      - SERVER_ARGS=--env ALOHA_SIM
+      - SERVER_ARGS=policy:checkpoint --policy.config=pi05_ur5_aic --policy.dir=gs://openpi-assets/checkpoints/pi05_base
       - OPENPI_DATA_HOME=/openpi_assets
       - TPU_NAME=local
       - TF_CPP_MIN_LOG_LEVEL=0
@@ -24,21 +24,22 @@ services:
     volumes:
       - /mnt/disks/aic-challenge/aic/openpi/.venv/lib/python3.11/site-packages/libtpu/libtpu.so:/lib/libtpu.so
       - ../openpi:/app
-      # - /home/aanbarasu/.cache/openpi:/openpi_assets
-      # - /usr/share/tpu/:/usr/share/tpu/
   eval:
     image: ghcr.io/intrinsic-dev/aic/aic_eval
-    # image: my-eval:v1
     build:
       dockerfile: docker/aic_eval/Dockerfile
       context: ..
+    volumes:
+      - /mnt/disks/aic-challenge/aic_results:/root/aic_results
+      - /mnt/disks/aic-challenge/aic/aic_description/world/aic.sdf:/ws_aic/install/share/aic_description/world/aic.sdf
+      - /mnt/disks/aic-challenge/aic/aic_bringup/config/ros_gz_bridge_config.yaml:/ws_aic/install/share/aic_bringup/config/ros_gz_bridge_config.yaml
+      - /mnt/disks/aic-challenge/aic/aic_engine/config/sample_config.yaml:/ws_aic/install/share/aic_engine/config/sample_config.yaml
     command: gazebo_gui:=false launch_rviz:=false ground_truth:=false start_aic_engine:=true shutdown_on_aic_engine_exit:=true
     networks:
       - default
     environment:
       AIC_EVAL_PASSWD: CHANGE_IN_PROD
       AIC_MODEL_PASSWD: CHANGE_IN_PROD
-      # AIC_ENABLE_ACL: true
   model:
     image: my-solution:v1
     build:
@@ -54,7 +55,6 @@ services:
       ZENOH_ROUTER_CHECK_ATTEMPTS: -1
       AIC_ROUTER_ADDR: eval:7447
       AIC_MODEL_PASSWD: CHANGE_IN_PROD
-      # AIC_ENABLE_ACL: true
 networks:
   default:
     internal: true

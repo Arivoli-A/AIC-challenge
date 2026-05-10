@@ -109,3 +109,9 @@
   gz_type_name: "gz.msgs.StringMsg"
   direction: GZ_TO_ROS
   lazy: true
+
+- ros_topic_name: "/env_camera/image"
+  gz_topic_name: "/env_camera/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS

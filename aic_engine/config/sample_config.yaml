@@ -41,6 +41,12 @@ scoring:
     - topic:
     # Controller state for force torque tare
         name: "/aic_controller/controller_state"
+- topic:
+        name: /env_camera/image
+        type: sensor_msgs/msg/Image
+    - topic:
+        name: /center_camera/image
+        type: sensor_msgs/msg/Image
         type: "aic_control_interfaces/msg/ControllerState"
 
 task_board_limits:
