@@ -26,9 +26,9 @@ services:
       - ../openpi:/app
   eval:
     image: ghcr.io/intrinsic-dev/aic/aic_eval
-    build:
-      dockerfile: docker/aic_eval/Dockerfile
-      context: ..
+    # build:
+    #   dockerfile: docker/aic_eval/Dockerfile
+    #   context: ..
     volumes:
       - /mnt/disks/aic-challenge/aic_results:/root/aic_results
       - /mnt/disks/aic-challenge/aic/aic_description/world/aic.sdf:/ws_aic/install/share/aic_description/world/aic.sdf
