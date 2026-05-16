@@ -47,9 +47,7 @@ services:
       context: ..
     networks:
       - default
-    extra_hosts:
-      - "openpi_server:host-gateway"
-    command: --ros-args -p policy:=aic_example_policies.ros.RunOpenPIBase_latest -p openpi_host:=openpi_server
+    command: --ros-args -p policy:=aic_example_policies.ros.RunOpenPIBase_latest -p openpi_host:=${OPENPI_HOST_IP:-openpi_server}
     environment:
       RMW_IMPLEMENTATION: rmw_zenoh_cpp
       ZENOH_ROUTER_CHECK_ATTEMPTS: -1
