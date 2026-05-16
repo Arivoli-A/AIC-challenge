@@ -31,9 +31,9 @@ services:
       context: ..
     volumes:
       - /mnt/disks/aic-challenge/aic_results:/root/aic_results
-      - /mnt/disks/aic-challenge/aic/aic_description/world/aic.sdf:/ws_aic/install/share/aic_description/world/aic.sdf
-      - /mnt/disks/aic-challenge/aic/aic_bringup/config/ros_gz_bridge_config.yaml:/ws_aic/install/share/aic_bringup/config/ros_gz_bridge_config.yaml
-      - /mnt/disks/aic-challenge/aic/aic_engine/config/sample_config.yaml:/ws_aic/install/share/aic_engine/config/sample_config.yaml
+      - /mnt/disks/aic-challenge/aic/aic_description/world/:/ws_aic/install/share/aic_description/world/
+      - /mnt/disks/aic-challenge/aic/aic_bringup/config/:/ws_aic/install/share/aic_bringup/config/
+      - /mnt/disks/aic-challenge/aic/aic_engine/config/:/ws_aic/install/share/aic_engine/config/
     command: gazebo_gui:=false launch_rviz:=false ground_truth:=false start_aic_engine:=true shutdown_on_aic_engine_exit:=true
     networks:
       - default

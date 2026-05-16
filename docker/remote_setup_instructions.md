@@ -26,7 +26,7 @@ This is the default and most straightforward way to run your entire setup on a s
 
 **Command:**
 ```bash
-docker-compose up
+docker compose up
 ```
 (Alternatively, you can explicitly list all services: `docker-compose up openpi_server eval model`)
 
@@ -41,7 +41,7 @@ Start only the `openpi_server` service.
 
 **Command:**
 ```bash
-docker-compose up openpi_server
+docker compose up openpi_server
 ```
 
 #### On your local machine:
@@ -49,8 +49,7 @@ Start the `eval` and `model` services. You need to tell the `model` service the 
 
 **Command:**
 ```bash
-export OPENPI_HOST_IP=YOUR_REMOTE_IP_ADDRESS
-docker-compose up eval model
+OPENPI_HOST_IP=YOUR_REMOTE_IP_ADDRESS docker compose up eval model
 ```
 **Important:** Replace `YOUR_REMOTE_IP_ADDRESS` with the actual IP address or hostname of your remote machine where the `openpi_server` is running.
 
