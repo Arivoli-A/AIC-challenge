@@ -22,37 +22,44 @@ services:
       - PJRT_DEVICE=TPU
       - LD_LIBRARY_PATH=/lib
     volumes:
-      - /mnt/disks/aic-challenge/aic/openpi/.venv/lib/python3.11/site-packages/libtpu/libtpu.so:/lib/libtpu.so
+      - ../openpi/.venv/lib/python3.11/site-packages/libtpu/libtpu.so:/lib/libtpu.so
       - ../openpi:/app
   eval:
     image: ghcr.io/intrinsic-dev/aic/aic_eval
     # build:
     #   dockerfile: docker/aic_eval/Dockerfile
     #   context: ..
+    devices:
+      - /dev/dri
     volumes:
-      - /mnt/disks/aic-challenge/aic_results:/root/aic_results
-      - /mnt/disks/aic-challenge/aic/aic_description/world/aic.sdf:/ws_aic/install/share/aic_description/world/aic.sdf
-      - /mnt/disks/aic-challenge/aic/aic_bringup/config/ros_gz_bridge_config.yaml:/ws_aic/install/share/aic_bringup/config/ros_gz_bridge_config.yaml
-      - /mnt/disks/aic-challenge/aic/aic_engine/config/sample_config.yaml:/ws_aic/install/share/aic_engine/config/sample_config.yaml
-    command: gazebo_gui:=false launch_rviz:=false ground_truth:=false start_aic_engine:=true shutdown_on_aic_engine_exit:=true
+      - /tmp/.X11-unix:/tmp/.X11-unix  
+      - ../aic_results:/root/aic_results
+      - ../aic_description/world/aic.sdf:/ws_aic/install/share/aic_description/world/aic.sdf
+      - ../aic_bringup/config/ros_gz_bridge_config.yaml:/ws_aic/install/share/aic_bringup/config/ros_gz_bridge_config.yaml
+      - ../aic_engine/config/sample_config.yaml:/ws_aic/install/share/aic_engine/config/sample_config.yaml
+    command: gazebo_gui:=true launch_rviz:=true ground_truth:=false start_aic_engine:=true shutdown_on_aic_engine_exit:=true
     networks:
       - default
     environment:
       AIC_EVAL_PASSWD: CHANGE_IN_PROD
       AIC_MODEL_PASSWD: CHANGE_IN_PROD
+      DISPLAY: "${DISPLAY}"
   model:
     image: my-solution:v1
     build:
       dockerfile: docker/aic_model/Dockerfile
       context: ..
+    volumes:
+      - ../openpi_live_policy/openpi_live_policy:/ws_aic/src/aic/.pixi/envs/default/lib/python3.12/site-packages/openpi_live_policy
     networks:
       - default
-    command: --ros-args -p policy:=aic_example_policies.ros.RunOpenPIBase_latest -p openpi_host:=${OPENPI_HOST_IP:-openpi_server}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: --ros-args -p policy:=openpi_live_policy.RunOpenPIBaseDev -p openpi_host:=${OPENPI_HOST_IP:-host.docker.internal}
     environment:
       RMW_IMPLEMENTATION: rmw_zenoh_cpp
       ZENOH_ROUTER_CHECK_ATTEMPTS: -1
       AIC_ROUTER_ADDR: eval:7447
       AIC_MODEL_PASSWD: CHANGE_IN_PROD
 networks:
-  default:
-    internal: true
+  default: {}

@@ -1,71 +1,68 @@
 # Docker Compose Setup for Local and Remote OpenPI Server
 
-This document outlines how to use the `docker-compose.yaml` file to run your services in various configurations, supporting both local and remote deployment of the `openpi_server`.
+This setup supports both of these cases with a single `docker-compose.yaml`:
 
-## Configuration Overview
+1. Run `openpi_server`, `eval`, and `model` on the same machine.
+2. Run `openpi_server` on a remote machine, while `eval` and `model` run locally.
 
-The `docker-compose.yaml` is configured to allow the `model` service to connect to the `openpi_server` either locally (by default) or remotely (via an environment variable).
+## How it works
 
-The relevant part of the `model` service configuration is:
+The `openpi_server` service uses `network_mode: host`, so it is reachable on the Docker host's network rather than through Docker Compose service DNS.
+
+The `model` service therefore connects to:
+
+- `host.docker.internal` by default, which reaches the local Docker host
+- `OPENPI_HOST_IP` when you want to use a remote OpenPI server
+
+The relevant part of the configuration is:
+
 ```yaml
-  model:
-    # ...other configurations...
-    command: --ros-args -p policy:=aic_example_policies.ros.RunOpenPIBase_latest -p openpi_host:=${OPENPI_HOST_IP:-openpi_server}
-    # ...other configurations...
+model:
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  command: --ros-args -p policy:=aic_example_policies.ros.RunOpenPIBase_latest -p openpi_host:=${OPENPI_HOST_IP:-host.docker.internal}
 ```
--   If the `OPENPI_HOST_IP` environment variable is set, its value will be used as the `openpi_host`.
--   If `OPENPI_HOST_IP` is not set, `openpi_server` will be used as the hostname, which will resolve to the `openpi_server` service defined in the same `docker-compose.yaml` file if it's running locally.
 
-## Usage Scenarios
+## Scenario 1: All three services on the same machine
 
-Here are the different ways you can use the `docker-compose.yaml` file:
+Start everything together:
 
-### 1. Run all three containers locally (openpi_server, eval, model)
-
-This is the default and most straightforward way to run your entire setup on a single machine. All three services (`openpi_server`, `eval`, and `model`) will be started, and the `model` service will automatically connect to the `openpi_server` service via Docker's internal networking.
-
-**Command:**
 ```bash
 docker compose up
 ```
-(Alternatively, you can explicitly list all services: `docker-compose up openpi_server eval model`)
 
-### 2. Run `openpi_server` remotely and `eval` and `model` locally
+In this mode:
 
-This scenario is useful when you want to offload the `openpi_server` (e.g., to a powerful machine with a TPU) while running the `eval` and `model` services on your local machine.
+- `openpi_server` runs on the host network
+- `model` connects to `host.docker.internal`
+- `eval` and `model` still communicate with each other over the Compose network
 
-**Steps:**
+## Scenario 2: Remote `openpi_server`, local `eval` and `model`
 
-#### On your remote machine:
-Start only the `openpi_server` service.
+On the remote machine, start only `openpi_server`:
 
-**Command:**
 ```bash
 docker compose up openpi_server
 ```
 
-#### On your local machine:
-Start the `eval` and `model` services. You need to tell the `model` service the IP address or hostname of your remote `openpi_server` by setting the `OPENPI_HOST_IP` environment variable.
+On the local machine, start `eval` and `model` and point `model` at the remote machine:
 
-**Command:**
 ```bash
 OPENPI_HOST_IP=YOUR_REMOTE_IP_ADDRESS docker compose up eval model
 ```
-**Important:** Replace `YOUR_REMOTE_IP_ADDRESS` with the actual IP address or hostname of your remote machine where the `openpi_server` is running.
 
-### 3. Run only `openpi_server` on a remote machine
+Replace `YOUR_REMOTE_IP_ADDRESS` with the reachable IP address or hostname of the remote machine running `openpi_server`.
 
-If your goal is solely to run the `openpi_server` on a remote machine without involving the `eval` and `model` services locally, follow these steps.
+## Scenario 3: Only run `openpi_server`
 
-**Steps:**
+If you only want the OpenPI server on a machine:
 
-#### On your remote machine:
-Start only the `openpi_server` service.
-
-**Command:**
 ```bash
-docker-compose up openpi_server
+docker compose up openpi_server
 ```
 
-#### On your local machine:
-No action is required if you only intend to run the `openpi_server` remotely.
+## Notes
+
+- The Compose network is not marked `internal`, so `model` can reach a remote OpenPI host when needed.
+- `host.docker.internal` is explicitly mapped for Linux using Docker's `host-gateway` support.
+- If the remote setup still cannot connect, make sure the OpenPI server is listening on the expected port and that firewalls allow inbound traffic.

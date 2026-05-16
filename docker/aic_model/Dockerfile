@@ -7,6 +7,7 @@ ENV PATH="/root/.pixi/bin:$PATH"
 # Add base dependencies
 COPY aic_example_policies /ws_aic/src/aic/aic_example_policies
 COPY aic_model /ws_aic/src/aic/aic_model
+COPY openpi_live_policy /ws_aic/src/aic/openpi_live_policy
 COPY openpi-client /ws_aic/src/aic/openpi-client
 COPY aic_interfaces /ws_aic/src/aic/aic_interfaces
 COPY aic_utils /ws_aic/src/aic/aic_utils
