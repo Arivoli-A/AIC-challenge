@@ -54,5 +54,5 @@ services:
       AIC_ROUTER_ADDR: eval:7447
       AIC_MODEL_PASSWD: CHANGE_IN_PROD
 networks:
-  default:
-    internal: true
+  default: {}
+#    internal: true
